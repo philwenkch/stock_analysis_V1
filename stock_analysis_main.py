@@ -266,7 +266,7 @@ if __name__ == "__main__":
             
         a_tickerListStr = indeces_to_compare + a_tickerListStr
         # get time series dataframe
-        print('komme hier durch ..')
+        print('komme hier durch .. heute haben wir den ' + a_todayStr)
         a_TS_FromTickers = getTickersTimeSeries(a_tickerListStr, "2022-01-01", a_todayStr, "1d")
         print(a_TS_FromTickers)
         a_TS_FromTickers.to_csv( a_outputFilename )
