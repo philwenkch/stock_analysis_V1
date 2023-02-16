@@ -135,7 +135,7 @@ def main():
 
 if __name__ == "__main__":
 
-print('..coming in ..')
+    print('..coming in ..')
     ########################################################################
     ## Initial Streamlit settings
     st.set_page_config(
