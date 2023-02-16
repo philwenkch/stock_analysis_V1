@@ -1,0 +1,4 @@
+matplotlib
+scipy
+json
+yfinance
