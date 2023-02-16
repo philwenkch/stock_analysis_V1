@@ -271,6 +271,7 @@ if __name__ == "__main__":
         print(a_TS_FromTickers)
         a_TS_FromTickers.to_csv( a_outputFilename )
     else:
+        print('komme da durch, ohne Abruf .. heute haben wir den ' + a_todayStr)
         a_TS_FromTickers = pd.read_csv( a_outputFilename )
         a_TS_FromTickers.set_index('Date', inplace=True)
     data_load_state.text('Loading data...done!')
