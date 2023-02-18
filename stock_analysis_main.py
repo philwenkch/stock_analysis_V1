@@ -26,7 +26,7 @@ import os.path
 import json
 
 import yfinance as yf
-
+from yahooquery import Ticker as yqT
 
 
 ########################################################################
@@ -96,7 +96,57 @@ def getTickersInfo(a_tickerList, a_InfoList):
     a_df = pd.DataFrame(data = a_result, columns = ['ticker'] + a_InfoList)
     a_df.set_index('ticker')
     return a_df
- 
+
+########################################################################
+def getYqTickerInfo(a_ticker_list, a_InfoList):
+    ## query yahoo data
+    # Input: 
+    #        a_ticker_list: format as list [ 'Ticker Symbol 1', .. , 'Ticker Symbol n']
+    #        a_InfoList: format as collection {'main_key 1' : ['attriute1', 'attribute2', ..], ..
+    #                                             'main_key n' : ['attriute1', 'attribute2', ..]  }
+    #
+    # Output: a_result_df as dataframe with ticker symbol as index and columns of attributes ] } 
+    print('loading from yahooquery ..')
+    a_data = yqT(a_ticker_list).all_modules 
+    print('loading from yahooquery done.')
+    a_result = []
+    for a_tick in a_ticker_list:
+        a_current = a_data[a_tick]
+        a_tick_result = []
+        for a_tag in a_InfoList:
+            if a_tag in a_current.keys():
+                # get result for the current key
+                a_current_data_by_key = a_current[a_tag]
+                #get values for sub_key
+                for a_info in a_InfoList[a_tag]:
+                    if a_info in a_current_data_by_key.keys():
+                        a_tick_result.append( a_current_data_by_key[a_info] )
+                    else:
+                        print('following key ' + a_tag + '-' + a_info + ' is not available for ' + a_tick + ' .. putting NaN as Value.')
+                        a_tick_result.append( np.nan )  
+            else:
+                print('following key ' + a_tag + ' is not available for ' + a_tick)
+                raise Exception('no repair for this - make sure key exist ..')
+                   
+                    
+        print('done for ' + a_tick + ' ..' )
+        a_result.append( [a_tick] + a_tick_result )
+    
+    #flatten the names in order to name columns in dataframe
+    a_result_names = []
+    for a_key in a_InfoList:
+        for a_subkey in a_InfoList[a_key]:
+            #print(a_key)
+            a_result_names.append( a_subkey )
+    a_result_names = list( ['ticker'] + a_result_names )
+        
+    #bring it to a panda data frame
+    a_result_df = pd.DataFrame(data = list(a_result), columns = a_result_names)
+    a_result_df.set_index('ticker')
+            
+    return a_result_df, a_result_names
+    
+
 
 ########################################################################
 def getNormalizedTickersInfo(a_TickersInfo, a_norm, a_index):
@@ -105,10 +155,16 @@ def getNormalizedTickersInfo(a_TickersInfo, a_norm, a_index):
     #       a_TickersInfo: DataFrame of unnormalizedTickersInfo
     #       a_norm: column name for which to normlize the other columns
     #       a_index: List of column names which to normalize
+    #
+    # Output:
+    #       same dataframe with added columns of normalized columns, 
+    #       normalized columnes are named with '*_norm'
+    #
+    #
     a_norm_df = a_TickersInfo.copy()
     
     for ind in a_index:
-        a_norm_df[ind] = a_norm_df[ind]/a_norm_df[a_norm]
+        a_norm_df[ind+'_norm'] = a_norm_df[ind]/a_norm_df[a_norm]
     return a_norm_df
 
 
@@ -135,7 +191,6 @@ def main():
 
 if __name__ == "__main__":
 
-    print('..coming in ..')
     ########################################################################
     ## Initial Streamlit settings
     st.set_page_config(
@@ -225,6 +280,11 @@ if __name__ == "__main__":
     a_todayStr = datetime.today().strftime("%Y-%m-%d")
 
 
+    a_info_list = {'financialData': ['numberOfAnalystOpinions', 'recommendationKey' ,'recommendationMean',
+                                     'currentPrice','targetMeanPrice','targetLowPrice','targetHighPrice'],
+                   'defaultKeyStatistics' : ['forwardEps']}
+
+
     ########################################################################
     ## Setup Info attributes for tickers to be informed of
     a_ticker_info = ['numberOfAnalystOpinions', 'recommendationKey', \
@@ -241,7 +301,9 @@ if __name__ == "__main__":
     data_load_state = st.text('Loading data... ' + a_outputFilename)
     if not os.path.isfile(a_outputFilename):
         # get a whole Info List for tickers
-        a_InfoListOfTickers = getTickersInfo( my_ticker_list, a_ticker_info )
+    ########### set out this routine becaus of problems by yfinance package
+    ####   a_InfoListOfTickers = getTickersInfo( my_ticker_list, a_ticker_info )
+        a_InfoListOfTickers, a_dummy = getYqTickerInfo(my_ticker_list, a_info_list )
         # add another column
         a_InfoListOfTickers['PricePerEPS'] = a_InfoListOfTickers['currentPrice']/a_InfoListOfTickers['forwardEps']
         print(a_InfoListOfTickers)
@@ -266,12 +328,11 @@ if __name__ == "__main__":
             
         a_tickerListStr = indeces_to_compare + a_tickerListStr
         # get time series dataframe
-        print('komme hier durch .. heute haben wir den ' + a_todayStr)
+        print('komme hier durch ..')
         a_TS_FromTickers = getTickersTimeSeries(a_tickerListStr, "2022-01-01", a_todayStr, "1d")
         print(a_TS_FromTickers)
         a_TS_FromTickers.to_csv( a_outputFilename )
     else:
-        print('komme da durch, ohne Abruf .. heute haben wir den ' + a_todayStr)
         a_TS_FromTickers = pd.read_csv( a_outputFilename )
         a_TS_FromTickers.set_index('Date', inplace=True)
     data_load_state.text('Loading data...done!')
@@ -282,11 +343,12 @@ if __name__ == "__main__":
                                                               'targetHighPrice', 'forwardEps'])
     ## adapt targetLowPrice and targetHighPrice to plot in Errorbar Plot
     
-    a_normInfoListOfTickers['targetLowPrice'] = a_normInfoListOfTickers['targetMeanPrice'] - a_normInfoListOfTickers['targetLowPrice']
-    a_normInfoListOfTickers['targetHighPrice'] = a_normInfoListOfTickers['targetHighPrice'] - a_normInfoListOfTickers['targetMeanPrice']
+    a_normInfoListOfTickers['targetLowPrice_norm'] = a_normInfoListOfTickers['targetMeanPrice_norm'] - a_normInfoListOfTickers['targetLowPrice_norm']
+    a_normInfoListOfTickers['targetHighPrice_norm'] = a_normInfoListOfTickers['targetHighPrice_norm'] - a_normInfoListOfTickers['targetMeanPrice_norm']
     # search nan and set it to zero
     a_normInfoListOfTickers = a_normInfoListOfTickers.fillna(0)
     
+    #put the filter values in action 
     a_normToDisplay = a_normInfoListOfTickers.loc[(a_normInfoListOfTickers['numberOfAnalystOpinions'] >= numOfAnalists) &
                                                   (a_normInfoListOfTickers['recommendationMean'] <= recomMean)]
 
@@ -325,9 +387,9 @@ if __name__ == "__main__":
     #st.pyplot(fig, None)
     
     ########################################################################
-    ## doing a plotly
-    figp = px.scatter(a_normToDisplay, x = 'ticker', y = 'targetMeanPrice', 
-                      error_y='targetHighPrice', error_y_minus='targetLowPrice', 
+    ## doing a plotly 
+    figp = px.scatter(a_normToDisplay, x = 'ticker', y = 'targetMeanPrice_norm', 
+                      error_y='targetHighPrice_norm', error_y_minus='targetLowPrice_norm', 
                       color = 'recommendationKey', size = 'numberOfAnalystOpinions',
                       hover_data=a_ticker_info, 
                       labels={'x': 'ticker name', 'y':'normalized Mean'} )
