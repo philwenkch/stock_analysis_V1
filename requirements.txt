@@ -2,3 +2,5 @@ matplotlib
 scipy
 plotly
 yfinance
+yahooquery
+
