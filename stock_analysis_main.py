@@ -113,21 +113,24 @@ def getYqTickerInfo(a_ticker_list, a_InfoList):
     for a_tick in a_ticker_list:
         a_current = a_data[a_tick]
         a_tick_result = []
-        for a_tag in a_InfoList:
-            if a_tag in a_current.keys():
-                # get result for the current key
-                a_current_data_by_key = a_current[a_tag]
-                #get values for sub_key
-                for a_info in a_InfoList[a_tag]:
-                    if a_info in a_current_data_by_key.keys():
-                        a_tick_result.append( a_current_data_by_key[a_info] )
-                    else:
-                        print('following key ' + a_tag + '-' + a_info + ' is not available for ' + a_tick + ' .. putting NaN as Value.')
-                        a_tick_result.append( np.nan )  
-            else:
-                print('following key ' + a_tag + ' is not available for ' + a_tick)
-                raise Exception('no repair for this - make sure key exist ..')
-                   
+        print('starting ' + a_tick)
+        if not isinstance(a_current, str):
+            for a_tag in a_InfoList:
+                if a_tag in a_current.keys():
+                    # get result for the current key
+                    a_current_data_by_key = a_current[a_tag]
+                    #get values for sub_key
+                    for a_info in a_InfoList[a_tag]:
+                        if a_info in a_current_data_by_key.keys():
+                            a_tick_result.append( a_current_data_by_key[a_info] )
+                        else:
+                            print('following key ' + a_tag + '-' + a_info + ' is not available for ' + a_tick + ' .. putting NaN as Value.')
+                            a_tick_result.append( np.nan )  
+                else:
+                    print('following key ' + a_tag + ' is not available for ' + a_tick)
+                    raise Exception('no repair for this - make sure key exist ..')
+        else:
+            print('something went wrong -> ' + a_current)
                     
         print('done for ' + a_tick + ' ..' )
         a_result.append( [a_tick] + a_tick_result )
@@ -409,8 +412,8 @@ if __name__ == "__main__":
         st.markdown('## select ticker for time serie:')
         a_filter_object = filter(lambda a: 'Close' in a, a_TS_FromTickers.columns.values)
         a_selectionList = list(a_filter_object)
-        a_selectedTickers = st.multiselect('select tickers', a_selectionList, 
-                                                   ['^NDX_Close','^GDAXI_Close','^SSMI_Close'])
+        a_selectionList.sort()
+        a_selectedTickers = st.multiselect('select tickers', a_selectionList,['^NDX_Close','^GDAXI_Close','^SSMI_Close'])
         a_startTime, a_endTime = st.select_slider('select range to compare:', list(a_TS_FromTickers.index), 
                                                    value = [list(a_TS_FromTickers.index)[0], 
                                                            list(a_TS_FromTickers.index)[len(list(a_TS_FromTickers.index))-1]] )
@@ -482,6 +485,7 @@ if __name__ == "__main__":
         col1, col2 = st.columns(2)
         a_filter_object = filter(lambda a: 'Close' in a, a_TS_FromTickers.columns.values)
         a_selectionList = list(a_filter_object)
+        a_selectionList.sort()
         with col1:
             a_corrTicker1 = st.selectbox('select ticker 1', a_selectionList)
             a_corrTicker1Data = a_TS_FromTickers[a_startTime : a_endTime][a_corrTicker1]
@@ -495,18 +499,23 @@ if __name__ == "__main__":
     a_corrTickerResult = pd.concat([a_corrTicker1Data, a_corrTicker2Data], axis=1).reindex(a_corrTicker1Data.index)
     a_corrTickerResult.dropna(inplace=True, axis=0)
     
-    slope, intercept, r_value, p_value, std_err = stats.linregress(a_corrTickerResult[a_corrTicker1], 
+    if (len(a_corrTickerResult) != 0):
+        slope, intercept, r_value, p_value, std_err = stats.linregress(a_corrTickerResult[a_corrTicker1], 
                                                                   a_corrTickerResult[a_corrTicker2])
+        with st.sidebar:
+            st.text( 'slope : {:2.2E} +/- {:2.2E}'.format(slope, std_err) )
+            st.text( 'p-value for Hypt. "no slope": {:2.2E}'.format(p_value) )
+            st.text( 'r-value: {:4.2f}'.format(r_value) )
+    else:
+        print('no match to correlate ..')
     
     
-    with st.sidebar:
-       st.text( 'slope : {:2.2E} +/- {:2.2E}'.format(slope, std_err) )
-       st.text( 'p-value for Hypt. "no slope": {:2.2E}'.format(p_value) )
-       st.text( 'r-value: {:4.2f}'.format(r_value) )
+
     
     if st.checkbox('show correlation line'):
-        a_corrTickerResult['corrLine'] = intercept + slope*a_corrTickerResult[a_corrTicker1]
-        figcorr = px.scatter(a_corrTickerResult, x = a_corrTicker1, y = [a_corrTicker2, 'corrLine'])
+        if (len(a_corrTickerResult) != 0):
+            a_corrTickerResult['corrLine'] = intercept + slope*a_corrTickerResult[a_corrTicker1]
+            figcorr = px.scatter(a_corrTickerResult, x = a_corrTicker1, y = [a_corrTicker2, 'corrLine'])
     else:
         figcorr = px.scatter(a_corrTickerResult, x = a_corrTicker1, y = a_corrTicker2)
         
